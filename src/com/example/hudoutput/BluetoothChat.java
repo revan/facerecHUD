@@ -32,6 +32,8 @@ import android.view.View;
 import android.view.Window;
 import android.view.View.OnClickListener;
 import android.view.inputmethod.EditorInfo;
+import android.widget.AdapterView;
+import android.widget.AdapterView.OnItemClickListener;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
@@ -66,15 +68,13 @@ public class BluetoothChat extends Activity {
     // Layout Views
     private TextView mTitle;
     private ListView mConversationView;
-    private EditText mOutEditText;
-    private Button mSendButton;
+    private Button mClickButton;
 
     // Name of the connected device
     private String mConnectedDeviceName = null;
     // Array adapter for the conversation thread
     private ArrayAdapter<String> mConversationArrayAdapter;
     // String buffer for outgoing messages
-    private StringBuffer mOutStringBuffer;
     // Local Bluetooth adapter
     private BluetoothAdapter mBluetoothAdapter = null;
     // Member object for the chat services
@@ -150,9 +150,14 @@ public class BluetoothChat extends Activity {
         
         // Initialize the BluetoothChatService to perform bluetooth connections
         mChatService = new BluetoothChatService(this, mHandler);
-
-        // Initialize the buffer for outgoing messages
-        mOutStringBuffer = new StringBuffer("");
+        
+        mClickButton = (Button) findViewById(R.id.clickButton);
+        mClickButton.setOnClickListener(new OnClickListener() {
+			@Override
+			public void onClick(View v) {
+				sendMessage("click");
+			}
+		});
     }
 
     @Override
@@ -201,10 +206,6 @@ public class BluetoothChat extends Activity {
             // Get the message bytes and tell the BluetoothChatService to write
             byte[] send = message.getBytes();
             mChatService.write(send);
-
-            // Reset out string buffer to zero and clear the edit text field
-            mOutStringBuffer.setLength(0);
-            mOutEditText.setText(mOutStringBuffer);
         }
     }
 
@@ -255,6 +256,11 @@ public class BluetoothChat extends Activity {
                 // construct a string from the valid bytes in the buffer
                 String readMessage = new String(readBuf, 0, msg.arg1);
                 mConversationArrayAdapter.add(readMessage);
+                
+                //TODO keep focus on newest
+                //mConversationView.setSelection(mConversationView.getCount());
+                //mConversationView.setSelection(0);
+                
                 break;
             case MESSAGE_DEVICE_NAME:
                 // save the connected device's name
