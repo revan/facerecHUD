@@ -16,10 +16,19 @@
 
 package com.example.hudpassthrough;
 
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
+
 import android.app.Activity;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
+import android.content.Context;
 import android.content.Intent;
+import android.hardware.Camera;
+import android.hardware.Camera.PictureCallback;
+import android.hardware.Camera.ShutterCallback;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
@@ -28,6 +37,7 @@ import android.view.KeyEvent;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
+import android.view.SurfaceView;
 import android.view.View;
 import android.view.Window;
 import android.view.View.OnClickListener;
@@ -35,6 +45,7 @@ import android.view.inputmethod.EditorInfo;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.FrameLayout;
 import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -80,6 +91,7 @@ public class BluetoothChat extends Activity {
     // Member object for the chat services
     private BluetoothChatService mChatService = null;
 
+    private static Camera mCamera;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -105,6 +117,15 @@ public class BluetoothChat extends Activity {
             finish();
             return;
         }
+        
+        mCamera=Camera.open();
+        
+		CamPreview camPreview = new CamPreview(this,mCamera);
+		camPreview.setSurfaceTextureListener(camPreview);
+		FrameLayout preview = (FrameLayout) findViewById(R.id.cameraView); 
+		preview.addView(camPreview);
+		CamCallback camCallback = new CamCallback();
+		mCamera.setPreviewCallback(camCallback);
     }
 
     @Override
@@ -126,8 +147,6 @@ public class BluetoothChat extends Activity {
     @Override
     public synchronized void onResume() {
         super.onResume();
-        if(D) Log.e(TAG, "+ ON RESUME +");
-
         // Performing this check in onResume() covers the case in which BT was
         // not enabled during onStart(), so we were paused to enable it...
         // onResume() will be called when ACTION_REQUEST_ENABLE activity returns.
@@ -141,8 +160,6 @@ public class BluetoothChat extends Activity {
     }
 
     private void setupChat() {
-        Log.d(TAG, "setupChat()");
-
         // Initialize the array adapter for the conversation thread
         mConversationArrayAdapter = new ArrayAdapter<String>(this, R.layout.message);
         mConversationView = (ListView) findViewById(R.id.in);
@@ -171,15 +188,10 @@ public class BluetoothChat extends Activity {
     }
 
     @Override
-    public synchronized void onPause() {
-        super.onPause();
-        if(D) Log.e(TAG, "- ON PAUSE -");
-    }
-
-    @Override
     public void onStop() {
         super.onStop();
-        if(D) Log.e(TAG, "-- ON STOP --");
+        mCamera.stopPreview();
+        mCamera.release();
     }
 
     @Override
@@ -187,7 +199,6 @@ public class BluetoothChat extends Activity {
         super.onDestroy();
         // Stop the Bluetooth chat services
         if (mChatService != null) mChatService.stop();
-        if(D) Log.e(TAG, "--- ON DESTROY ---");
     }
 
     private void ensureDiscoverable() {
@@ -232,7 +243,6 @@ public class BluetoothChat extends Activity {
                 String message = view.getText().toString();
                 sendMessage(message);
             }
-            if(D) Log.i(TAG, "END onEditorAction");
             return true;
         }
     };
@@ -270,6 +280,12 @@ public class BluetoothChat extends Activity {
                 // construct a string from the valid bytes in the buffer
                 String readMessage = new String(readBuf, 0, msg.arg1);
                 mConversationArrayAdapter.add(mConnectedDeviceName+":  " + readMessage);
+                
+                //take picture if commanded
+                if(readMessage.equals("click")){
+                	mCamera.takePicture(shutterCallback, rawCallback, jpegCallback);
+                }
+                
                 break;
             case MESSAGE_DEVICE_NAME:
                 // save the connected device's name
@@ -352,5 +368,46 @@ public class BluetoothChat extends Activity {
         }
         return false;
     }
+    
+    ShutterCallback shutterCallback = new ShutterCallback() {
+		public void onShutter() {
+			// Log.d(TAG, "onShutter'd");
+		}
+	};
 
+	PictureCallback rawCallback = new PictureCallback() {
+		public void onPictureTaken(byte[] data, Camera camera) {
+			// Log.d(TAG, "onPictureTaken - raw");
+		}
+	};
+
+	PictureCallback jpegCallback = new PictureCallback() {
+		public void onPictureTaken(byte[] data, Camera camera) {
+		FileOutputStream outStream = null;
+			try {
+				// Write to SD Card
+				String fileName = String.format("/sdcard/camtest/%d.jpg", System.currentTimeMillis());
+				outStream = new FileOutputStream(fileName);
+				outStream.write(data);
+				outStream.close();
+				Log.d("", "onPictureTaken - wrote bytes: " + data.length);
+
+				camera.startPreview();
+
+			} catch (FileNotFoundException e) {
+				e.printStackTrace();
+			} catch (IOException e) {
+				e.printStackTrace();
+			} finally {
+			}
+			Log.d("", "onPictureTaken - jpeg");
+		}
+
+	};
+	
+	private class CamCallback implements Camera.PreviewCallback{
+		public void onPreviewFrame(byte[] data, Camera camera){
+			     // Process the camera data here
+		}
+	}
 }
