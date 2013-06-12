@@ -120,6 +120,8 @@ public class BluetoothChat extends Activity {
         
         mCamera=Camera.open();
         
+        mCamera.enableShutterSound(false); //Questionable Legality!
+        
 		CamPreview camPreview = new CamPreview(this,mCamera);
 		camPreview.setSurfaceTextureListener(camPreview);
 		FrameLayout preview = (FrameLayout) findViewById(R.id.cameraView); 
