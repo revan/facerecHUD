@@ -30,7 +30,7 @@ public class CamPreview extends TextureView implements SurfaceTextureListener {
 	     } catch (IOException t) {}
 
 	    mCamera.startPreview();
-	    this.setVisibility(INVISIBLE); // Make the surface invisible as soon as it is created
+	    this.setVisibility(GONE);
 	  }
 
 	  @Override
