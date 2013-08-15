@@ -20,16 +20,29 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.util.ArrayList;
 
 import android.app.Activity;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.content.Context;
 import android.content.Intent;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.Canvas;
+import android.graphics.ColorMatrix;
+import android.graphics.ColorMatrixColorFilter;
+import android.graphics.ImageFormat;
+import android.graphics.Paint;
+import android.graphics.PointF;
 import android.hardware.Camera;
+import android.hardware.Camera.Parameters;
 import android.hardware.Camera.PictureCallback;
 import android.hardware.Camera.ShutterCallback;
+import android.media.FaceDetector;
+import android.media.FaceDetector.Face;
 import android.os.Bundle;
+import android.os.Environment;
 import android.os.Handler;
 import android.os.Message;
 import android.util.Log;
@@ -46,6 +59,7 @@ import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.FrameLayout;
+import android.widget.ImageView;
 import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -92,6 +106,7 @@ public class BluetoothChat extends Activity {
     private BluetoothChatService mChatService = null;
 
     private static Camera mCamera;
+    private static FaceDetector facedec;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -120,7 +135,7 @@ public class BluetoothChat extends Activity {
         
         mCamera=Camera.open();
         
-        mCamera.enableShutterSound(false); //Questionable Legality!
+        //mCamera.enableShutterSound(false); //Questionable Legality!
         
 		CamPreview camPreview = new CamPreview(this,mCamera);
 		camPreview.setSurfaceTextureListener(camPreview);
@@ -128,6 +143,14 @@ public class BluetoothChat extends Activity {
 		preview.addView(camPreview);
 		CamCallback camCallback = new CamCallback();
 		mCamera.setPreviewCallback(camCallback);
+		
+		Parameters params = mCamera.getParameters();
+		params.setPictureFormat(ImageFormat.RGB_565);
+		
+		mCamera.setParameters(params);
+		PeopleDB people = new PeopleDB();
+		System.out.println(people.find(1, "name"));
+		
     }
 
     @Override
@@ -388,13 +411,46 @@ public class BluetoothChat extends Activity {
 		FileOutputStream outStream = null;
 			try {
 				// Write to SD Card
-				String fileName = String.format("/sdcard/camtest/%d.jpg", System.currentTimeMillis());
+				String fileName = String.format(Environment.getExternalStorageDirectory().getPath()+"/camtest/%d.bmp", System.currentTimeMillis());
 				outStream = new FileOutputStream(fileName);
 				outStream.write(data);
 				outStream.close();
 				Log.d("", "onPictureTaken - wrote bytes: " + data.length);
+				
+				if(facedec==null) facedec = new FaceDetector(camera.getParameters().getPictureSize().width, camera.getParameters().getPictureSize().height, 1);
+				Face[] faces = new Face[1];
+				
+				BitmapFactory.Options opts = new BitmapFactory.Options();
+				opts.inPreferredConfig = Bitmap.Config.RGB_565;
+				Bitmap image = BitmapFactory.decodeByteArray(data, 0, data.length, opts);
+				
+				facedec.findFaces(image,faces);
+				
+				if(faces[0]!=null){
+					//http://stackoverflow.com/questions/14207485/how-to-use-facedetector-face-for-face-recognition-on-android
+					PointF midPoint=new PointF();
+			        faces[0].getMidPoint(midPoint);         
+			        double eyeDistance=faces[0].eyesDistance();
 
-				camera.startPreview();
+			        float left = midPoint.x - (float)(1.4 * eyeDistance);
+			        float top = midPoint.y - (float)(1.4 * eyeDistance);
+
+			        Bitmap bmFace = Bitmap.createBitmap(image, (int) left, (int) top, (int) (2.8 * eyeDistance), (int) (3.3 * eyeDistance));
+			        
+					try {
+						// Write to SD Card
+						fileName = String.format(Environment.getExternalStorageDirectory().getPath()+"/camtest/%d.png", System.currentTimeMillis());
+						outStream = new FileOutputStream(fileName);
+						bmFace= toGrayscale(bmFace);
+						bmFace.compress(Bitmap.CompressFormat.PNG, 90, outStream);
+						//output.setText("Success");
+						((ImageView)findViewById(R.id.imageView1)).setImageBitmap(bmFace);
+					}catch(Exception e){
+						Log.e("Face",e.toString());
+					}
+			        
+				}
+				
 
 			} catch (FileNotFoundException e) {
 				e.printStackTrace();
@@ -402,10 +458,27 @@ public class BluetoothChat extends Activity {
 				e.printStackTrace();
 			} finally {
 			}
-			Log.d("", "onPictureTaken - jpeg");
+			camera.startPreview();
 		}
 
 	};
+	
+	//http://stackoverflow.com/questions/8381514/android-converting-color-image-to-grayscale
+	private Bitmap toGrayscale(Bitmap bmpOriginal){        
+        int width, height;
+        height = bmpOriginal.getHeight();
+        width = bmpOriginal.getWidth();    
+
+        Bitmap bmpGrayscale = Bitmap.createBitmap(width, height, Bitmap.Config.RGB_565);
+        Canvas c = new Canvas(bmpGrayscale);
+        Paint paint = new Paint();
+        ColorMatrix cm = new ColorMatrix();
+        cm.setSaturation(0);
+        ColorMatrixColorFilter f = new ColorMatrixColorFilter(cm);
+        paint.setColorFilter(f);
+        c.drawBitmap(bmpOriginal, 0, 0, paint);
+        return bmpGrayscale;
+    }
 	
 	private class CamCallback implements Camera.PreviewCallback{
 		public void onPreviewFrame(byte[] data, Camera camera){
