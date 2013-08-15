@@ -16,11 +16,25 @@
 
 package com.example.hudpassthrough;
 
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.util.ArrayList;
+
+import org.apache.http.HttpResponse;
+import org.apache.http.client.ClientProtocolException;
+import org.apache.http.client.HttpClient;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.entity.mime.HttpMultipartMode;
+import org.apache.http.entity.mime.MultipartEntity;
+import org.apache.http.entity.mime.content.FileBody;
+import org.apache.http.impl.client.DefaultHttpClient;
+import org.apache.http.protocol.BasicHttpContext;
+import org.apache.http.protocol.HttpContext;
+
 
 import android.app.Activity;
 import android.bluetooth.BluetoothAdapter;
@@ -408,7 +422,7 @@ public class BluetoothChat extends Activity {
 
 	PictureCallback jpegCallback = new PictureCallback() {
 		public void onPictureTaken(byte[] data, Camera camera) {
-		FileOutputStream outStream = null;
+			FileOutputStream outStream = null;
 			try {
 				// Write to SD Card
 				String fileName = String.format(Environment.getExternalStorageDirectory().getPath()+"/camtest/%d.bmp", System.currentTimeMillis());
@@ -435,11 +449,11 @@ public class BluetoothChat extends Activity {
 			        float left = midPoint.x - (float)(1.4 * eyeDistance);
 			        float top = midPoint.y - (float)(1.4 * eyeDistance);
 
-			        Bitmap bmFace = Bitmap.createBitmap(image, (int) left, (int) top, (int) (2.8 * eyeDistance), (int) (3.3 * eyeDistance));
+			        Bitmap bmFace = Bitmap.createScaledBitmap(Bitmap.createBitmap(image, (int) left, (int) top, (int) (2.8 * eyeDistance), (int) (3.3 * eyeDistance)),125,150,false);
 			        
+			        fileName = String.format(Environment.getExternalStorageDirectory().getPath()+"/camtest/%d.png", System.currentTimeMillis());
 					try {
 						// Write to SD Card
-						fileName = String.format(Environment.getExternalStorageDirectory().getPath()+"/camtest/%d.png", System.currentTimeMillis());
 						outStream = new FileOutputStream(fileName);
 						bmFace= toGrayscale(bmFace);
 						bmFace.compress(Bitmap.CompressFormat.PNG, 90, outStream);
@@ -447,9 +461,55 @@ public class BluetoothChat extends Activity {
 						((ImageView)findViewById(R.id.imageView1)).setImageBitmap(bmFace);
 					}catch(Exception e){
 						Log.e("Face",e.toString());
+						mConversationArrayAdapter.add("Fail");
 					}
+					
+					/*POST image to server*/
+					HttpClient httpClient = new DefaultHttpClient();
+				    HttpContext localContext = new BasicHttpContext();
+				    
+				    HttpPost httpPost = new HttpPost("http://10.50.250.4:5000"+"/rec");
+				    MultipartEntity multipartEntity = new MultipartEntity(HttpMultipartMode.BROWSER_COMPATIBLE); 
+				    multipartEntity.addPart("file", new FileBody(new File(fileName)));
+				    httpPost.setEntity(multipartEntity);
+				    //httpPost.addHeader("Content-Type", "image/png");
+				    
+				    HttpResponse response = null;
+					try {
+						 Log.d("Server","Going to execute");
+						response = httpClient.execute(httpPost,localContext);
+						Log.d("Server","Done executing");
+					} catch (ClientProtocolException e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+					} catch (IOException e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+					}
+				    
+			        Log.v("Server",response.getStatusLine().getStatusCode()+response.getStatusLine().getReasonPhrase());
+			        
+			        StringBuilder sb = new StringBuilder();
+			        try {
+			            BufferedReader reader = 
+			                   new BufferedReader(new InputStreamReader(response.getEntity().getContent()), 65728);
+			            String line = null;
+
+			            while ((line = reader.readLine()) != null) {
+			                sb.append(line);
+			            }
+			        }
+			        catch (IOException e) { e.printStackTrace(); }
+			        catch (Exception e) { e.printStackTrace(); }
+			        
+			        
+			        mConversationArrayAdapter.add(sb.toString());
+					
 			        
 				}
+				else
+					mConversationArrayAdapter.add("no faces found");
+
 				
 
 			} catch (FileNotFoundException e) {
