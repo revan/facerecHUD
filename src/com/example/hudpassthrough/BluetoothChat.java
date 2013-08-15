@@ -59,6 +59,7 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
 import android.os.Message;
+import android.os.StrictMode;
 import android.util.Log;
 import android.view.KeyEvent;
 import android.view.Menu;
@@ -121,6 +122,8 @@ public class BluetoothChat extends Activity {
 
     private static Camera mCamera;
     private static FaceDetector facedec;
+    
+    private static PeopleDB people;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -148,6 +151,8 @@ public class BluetoothChat extends Activity {
         }
         
         mCamera=Camera.open();
+        if(mCamera==null)
+        	Log.e("Camera","mCamera is null!");
         
         //mCamera.enableShutterSound(false); //Questionable Legality!
         
@@ -158,13 +163,9 @@ public class BluetoothChat extends Activity {
 		CamCallback camCallback = new CamCallback();
 		mCamera.setPreviewCallback(camCallback);
 		
-		Parameters params = mCamera.getParameters();
-		params.setPictureFormat(ImageFormat.RGB_565);
+		StrictMode.setThreadPolicy(new StrictMode.ThreadPolicy.Builder().permitAll().build());
 		
-		mCamera.setParameters(params);
-		PeopleDB people = new PeopleDB();
-		System.out.println(people.find(1, "name"));
-		
+		people = new PeopleDB();
     }
 
     @Override
@@ -182,9 +183,23 @@ public class BluetoothChat extends Activity {
             if (mChatService == null) setupChat();
         }
     }
+    /*
+    @Override
+    public void onPause() {
+		if (mCamera != null) {
+			//mCamera.release();
+		    mCamera = null;
+		}
+		super.onPause();
+    }
+	*/
 
     @Override
     public synchronized void onResume() {
+    	if(mCamera==null){
+			mCamera=Camera.open();
+			//mCamera.enableShutterSound(false); //Questionable Legality!
+		}
         super.onResume();
         // Performing this check in onResume() covers the case in which BT was
         // not enabled during onStart(), so we were paused to enable it...
@@ -322,7 +337,10 @@ public class BluetoothChat extends Activity {
                 
                 //take picture if commanded
                 if(readMessage.equals("click")){
-                	mCamera.takePicture(shutterCallback, rawCallback, jpegCallback);
+                	if(mCamera!=null)
+                		mCamera.takePicture(shutterCallback, rawCallback, jpegCallback);
+                	else
+                		mConversationArrayAdapter.add("ERROR: mCamera is null!");
                 }
                 
                 break;
@@ -503,7 +521,9 @@ public class BluetoothChat extends Activity {
 			        catch (Exception e) { e.printStackTrace(); }
 			        
 			        
-			        mConversationArrayAdapter.add(sb.toString());
+			        
+			        sendMessage(people.find(Integer.parseInt(sb.toString()), "name")+"\n");
+			        sendMessage(people.find(Integer.parseInt(sb.toString()), "job")+"\n");
 					
 			        
 				}
